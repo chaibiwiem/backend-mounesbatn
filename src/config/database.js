@@ -31,4 +31,13 @@ const sequelize = process.env.DATABASE_URL
       port: process.env.DB_PORT || 3306,
     });
 
+// Une instance Vercel gelee ne ferme jamais sa connexion : sans ce reglage,
+// MySQL la garde ouverte jusqu'a wait_timeout (souvent 8h) et la limite de
+// connexions de la base finit saturee. Le serveur la coupe apres 60s.
+if (process.env.VERCEL) {
+  sequelize.addHook('afterConnect', async (connection) => {
+    await connection.promise().query('SET SESSION wait_timeout = 60');
+  });
+}
+
 module.exports = sequelize;
