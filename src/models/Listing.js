@@ -110,6 +110,16 @@ module.exports = (sequelize, DataTypes) => {
     }
   );
 
+  // emailSettings contient des secrets chiffres (passEncrypted/apiKeyEncrypted) :
+  // jamais serialise dans une reponse API, quelle que soit la route. Le code
+  // serveur y accede toujours via listing.emailSettings ; le prestataire voit
+  // une version expurgee via getMyEmailSettings.
+  Listing.prototype.toJSON = function toJSON() {
+    const values = { ...this.get() };
+    delete values.emailSettings;
+    return values;
+  };
+
   Listing.associate = (models) => {
     Listing.belongsTo(models.User, { foreignKey: 'userId', as: 'owner' });
     Listing.belongsTo(models.Category, { foreignKey: 'categoryId', as: 'category' });
