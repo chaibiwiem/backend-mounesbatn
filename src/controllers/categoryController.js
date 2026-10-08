@@ -1,8 +1,6 @@
-const path = require('path');
-const fs = require('fs');
 const { validationResult } = require('express-validator');
 const db = require('../models');
-const { UPLOAD_DIR, ICON_UPLOAD_DIR } = require('../middleware/upload');
+const { deleteStoredFile } = require('../services/storageService');
 
 const { Category, Listing, AssociatedService } = db;
 
@@ -210,13 +208,9 @@ exports.updateCategory = async (req, res, next) => {
   }
 };
 
-// Supprime l'ancien fichier image stocke sur disque, le cas echeant (meme
-// pipeline que le logo prestataire - listingController.removeLogoFile).
-function removeCategoryImageFile(imageUrl) {
-  if (!imageUrl || !imageUrl.startsWith('/uploads/listings/')) return;
-  const filePath = path.join(UPLOAD_DIR, path.basename(imageUrl));
-  fs.unlink(filePath, () => {});
-}
+// Supprime l'ancien fichier image (disque local ou Cloudinary), le cas
+// echeant - voir services/storageService.deleteStoredFile.
+const removeCategoryImageFile = deleteStoredFile;
 
 // Image de vignette pour une categorie/sous-categorie (page d'accueil),
 // distincte de l'icone. Meme pipeline de verification que les photos de
@@ -258,12 +252,8 @@ exports.deleteCategoryImage = async (req, res, next) => {
 
 // Icone SVG de la categorie (affichee dans les menus/listes de categories,
 // distincte de l'image de vignette ci-dessus). Le fichier a deja ete assaini
-// et ecrit sur disque par persistVerifiedIcon avant d'arriver ici.
-function removeCategoryIconFile(iconUrl) {
-  if (!iconUrl || !iconUrl.startsWith('/uploads/icons/')) return;
-  const filePath = path.join(ICON_UPLOAD_DIR, path.basename(iconUrl));
-  fs.unlink(filePath, () => {});
-}
+// et stocke par persistVerifiedIcon avant d'arriver ici.
+const removeCategoryIconFile = deleteStoredFile;
 
 exports.uploadCategoryIcon = async (req, res, next) => {
   try {

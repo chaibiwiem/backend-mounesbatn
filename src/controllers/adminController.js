@@ -1,6 +1,4 @@
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const bcrypt = require('bcrypt');
 const { Op, fn, col } = require('sequelize');
 const { validationResult } = require('express-validator');
@@ -9,7 +7,8 @@ const connectionFeeService = require('../services/connectionFeeService');
 const emailService = require('../services/emailService');
 const reviewService = require('../services/reviewService');
 const providerPurgeService = require('../services/providerPurgeService');
-const { persistBuffer, detectRealMimeType, UPLOAD_DIR, LEGAL_UPLOAD_DIR } = require('../middleware/upload');
+const { storeVerifiedImage, storeLegalImage, detectRealMimeType, LEGAL_FOLDER } = require('../middleware/upload');
+const { readPrivateFile, deletePrivateFile } = require('../services/storageService');
 const { PLAN_CATALOG, VALID_PLANS, addInterval, updatePlanCatalogEntry } = require('../services/planService');
 const { generateUniqueListingSlug } = require('../utils/slugify');
 
@@ -492,9 +491,9 @@ exports.createProvider = async (req, res, next) => {
       emailVerified: true, // identité vouchée par l'admin lors de l'onboarding
     });
 
-    // Carte CIN : nom de fichier stocke tel quel (PAS une URL) - le dossier
-    // n'est jamais servi statiquement, voir middleware/upload.js.
-    const cinDocumentUrl = cinFile ? persistBuffer(cinFile.buffer, LEGAL_UPLOAD_DIR) : null;
+    // Carte CIN : reference privee stockee telle quelle (PAS une URL
+    // publique) - jamais servie statiquement, voir middleware/upload.js.
+    const cinDocumentUrl = cinFile ? await storeLegalImage(cinFile.buffer) : null;
 
     const slug = await generateUniqueListingSlug(Listing, title);
     const listing = await Listing.create({
@@ -524,10 +523,10 @@ exports.createProvider = async (req, res, next) => {
     });
 
     for (let i = 0; i < files.length; i += 1) {
-      const filename = persistBuffer(files[i].buffer, UPLOAD_DIR);
+      const url = await storeVerifiedImage(files[i].buffer);
       await Image.create({
         listingId: listing.id,
-        url: `/uploads/listings/${filename}`,
+        url,
         isPrimary: i === 0,
         sortOrder: i,
       });
@@ -644,19 +643,19 @@ exports.updateProvider = async (req, res, next) => {
 // Activation / desactivation (Super Admin + Moderateur) : motif optionnel,
 // email automatique au prestataire a chaque changement.
 // --- Carte CIN du gerant (document legal sensible, CLAUDE.md) ---------------
-// Stockee dans private-uploads/legal (jamais servie statiquement) : consultable
-// uniquement via ces routes admin authentifiees. listing.cinDocumentUrl ne
-// contient que le nom de fichier aleatoire.
-const cinFilePath = (filename) => path.join(LEGAL_UPLOAD_DIR, path.basename(filename));
-
+// Stockee en prive (Cloudinary "authenticated", ou private-uploads/legal en
+// local - jamais servie statiquement) : consultable uniquement via ces routes
+// admin authentifiees. listing.cinDocumentUrl ne contient qu'une reference.
 exports.getProviderCin = async (req, res, next) => {
   try {
     const listing = await Listing.findByPk(req.params.id, { paranoid: false });
-    if (!listing?.cinDocumentUrl || !fs.existsSync(cinFilePath(listing.cinDocumentUrl))) {
+    const file = await readPrivateFile(listing?.cinDocumentUrl, LEGAL_FOLDER);
+    if (!file) {
       return res.status(404).json({ message: 'Aucune carte CIN enregistrée.' });
     }
     res.set('Cache-Control', 'no-store');
-    return res.sendFile(cinFilePath(listing.cinDocumentUrl));
+    res.type(file.contentType);
+    return res.send(file.buffer);
   } catch (err) {
     return next(err);
   }
@@ -672,15 +671,15 @@ exports.uploadProviderCin = async (req, res, next) => {
       return res.status(400).json({ message: 'Aucun fichier reçu.' });
     }
     // Type reel verifie (magic bytes), pas seulement l'extension.
-    const filename = persistBuffer(req.file.buffer, LEGAL_UPLOAD_DIR);
-    if (!filename) {
+    const cinRef = await storeLegalImage(req.file.buffer);
+    if (!cinRef) {
       return res.status(400).json({ message: 'La carte CIN est invalide. Utilisez JPG ou PNG.' });
     }
 
     const previous = listing.cinDocumentUrl;
-    listing.cinDocumentUrl = filename;
+    listing.cinDocumentUrl = cinRef;
     await listing.save();
-    if (previous) fs.unlink(cinFilePath(previous), () => {});
+    deletePrivateFile(previous, LEGAL_FOLDER);
 
     return res.json({ message: 'Carte CIN enregistrée.', hasCinDocument: true });
   } catch (err) {
@@ -697,7 +696,7 @@ exports.deleteProviderCin = async (req, res, next) => {
     const previous = listing.cinDocumentUrl;
     listing.cinDocumentUrl = null;
     await listing.save();
-    if (previous) fs.unlink(cinFilePath(previous), () => {});
+    deletePrivateFile(previous, LEGAL_FOLDER);
 
     return res.json({ message: 'Carte CIN supprimée.', hasCinDocument: false });
   } catch (err) {

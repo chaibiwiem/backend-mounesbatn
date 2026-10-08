@@ -132,7 +132,7 @@ exports.addVehicle = async (req, res, next) => {
       return res.status(400).json({ message: 'Boîte de vitesses invalide.' });
     }
 
-    const image = persistOptionalImage(req.file, res);
+    const image = await persistOptionalImage(req.file, res);
     if (image.error) return;
 
     const vehicle = await Vehicle.create({
@@ -178,7 +178,7 @@ exports.updateVehicle = async (req, res, next) => {
       return res.status(400).json({ message: 'Type de véhicule invalide.' });
     }
 
-    const image = persistOptionalImage(req.file, res);
+    const image = await persistOptionalImage(req.file, res);
     if (image.error) return;
 
     EDITABLE_VEHICLE_FIELDS.forEach((field) => {

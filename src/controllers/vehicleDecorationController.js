@@ -46,7 +46,7 @@ exports.addDecoration = async (req, res, next) => {
       return res.status(400).json({ message: 'Nom du modèle requis.' });
     }
 
-    const image = persistOptionalImage(req.file, res);
+    const image = await persistOptionalImage(req.file, res);
     if (image.error) return;
 
     const decoration = await VehicleDecoration.create({
@@ -69,7 +69,7 @@ exports.updateDecoration = async (req, res, next) => {
     const decoration = await getOwnedDecoration(req, res);
     if (!decoration) return;
 
-    const image = persistOptionalImage(req.file, res);
+    const image = await persistOptionalImage(req.file, res);
     if (image.error) return;
 
     const { name, description, price } = req.body;

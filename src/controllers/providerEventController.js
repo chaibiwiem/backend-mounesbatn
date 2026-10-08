@@ -95,7 +95,7 @@ exports.createEvent = async (req, res, next) => {
 
     const { title, description, type, eventDate, startTime, endTime, location, isPublished } = req.body;
 
-    const image = persistOptionalImage(req.file, res);
+    const image = await persistOptionalImage(req.file, res);
     if (image.error) return;
 
     const event = await ProviderEvent.create({
@@ -129,7 +129,7 @@ exports.updateEvent = async (req, res, next) => {
 
     const { title, description, type, eventDate, startTime, endTime, location, isPublished } = req.body;
 
-    const image = persistOptionalImage(req.file, res);
+    const image = await persistOptionalImage(req.file, res);
     if (image.error) return;
 
     if (title !== undefined) event.title = title.trim();
