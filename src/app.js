@@ -112,7 +112,14 @@ const publicCache = (req, res, next) => {
 };
 
 // Verification rapide que l'API repond (racine du domaine).
-app.get('/', (req, res) => res.json({ status: 'ok', service: 'Mounesba API' }));
+app.get('/', (req, res) =>
+  res.json({
+    status: 'ok',
+    service: 'Mounesba API',
+    // Mode de stockage des fichiers (jamais la cle elle-meme).
+    storage: process.env.CLOUDINARY_URL ? 'cloudinary' : 'local',
+  })
+);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', publicCache, categoryRoutes);
