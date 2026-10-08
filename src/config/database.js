@@ -8,6 +8,11 @@ const sequelizeOptions = {
   // detecte par le bundler et mysql2 manque dans la fonction deployee.
   dialectModule: require('mysql2'),
   logging: false,
+  // Bases hebergees exigeant SSL (ex. Aiven) : DB_SSL_CA = contenu du
+  // certificat CA fourni par l'hebergeur (certificat serveur verifie).
+  ...(process.env.DB_SSL_CA && {
+    dialectOptions: { ssl: { ca: process.env.DB_SSL_CA.replace(/\\n/g, '\n'), rejectUnauthorized: true } },
+  }),
   // Sur Vercel (serverless), chaque instance a son propre pool : avec la
   // limite de connexions des petites bases (ex. Clever Cloud Dev), un pool
   // de 5 sature vite (ER_TOO_MANY_USER_CONNECTIONS -> 500 aleatoires).
