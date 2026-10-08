@@ -92,6 +92,9 @@ app.use(express.json());
 app.use('/uploads/documents', (req, res) => res.status(404).json({ message: 'Document introuvable.' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Verification rapide que l'API repond (racine du domaine).
+app.get('/', (req, res) => res.json({ status: 'ok', service: 'Mounesba API' }));
+
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/cities', cityRoutes);
