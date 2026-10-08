@@ -8,6 +8,13 @@ const sequelizeOptions = {
   // detecte par le bundler et mysql2 manque dans la fonction deployee.
   dialectModule: require('mysql2'),
   logging: false,
+  // Sur Vercel (serverless), chaque instance a son propre pool : avec la
+  // limite de connexions des petites bases (ex. Clever Cloud Dev), un pool
+  // de 5 sature vite (ER_TOO_MANY_USER_CONNECTIONS -> 500 aleatoires).
+  // 1 connexion par instance, liberee des qu'elle est inactive.
+  pool: process.env.VERCEL
+    ? { max: Number(process.env.DB_POOL_MAX) || 1, min: 0, idle: 1000, acquire: 30000, evict: 1000 }
+    : { max: Number(process.env.DB_POOL_MAX) || 5, min: 0, idle: 10000, acquire: 30000 },
   define: {
     underscored: true,
     timestamps: true,
