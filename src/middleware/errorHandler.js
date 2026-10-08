@@ -7,7 +7,12 @@ function errorHandler(err, req, res, next) {
     ? 'Une erreur interne est survenue.'
     : err.message || 'Une erreur interne est survenue.';
 
-  res.status(status).json({ message });
+  // Code technique seul (ex. ER_CON_COUNT_ERROR, SequelizeConnectionError),
+  // jamais le message detaille : permet de diagnostiquer une erreur 500 en
+  // production sans exposer de details internes.
+  const code = status === 500 ? err.parent?.code || err.original?.code || err.code || err.name : undefined;
+
+  res.status(status).json(code ? { message, code } : { message });
 }
 
 module.exports = errorHandler;
