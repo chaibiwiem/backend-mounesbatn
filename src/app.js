@@ -1,5 +1,6 @@
 const path = require('path');
 const express = require('express');
+const { isCloudEnabled } = require('./services/storageService');
 const cors = require('cors');
 const helmet = require('helmet');
 
@@ -117,7 +118,7 @@ app.get('/', (req, res) =>
     status: 'ok',
     service: 'Mounesba API',
     // Mode de stockage des fichiers (jamais la cle elle-meme).
-    storage: process.env.CLOUDINARY_URL ? 'cloudinary' : 'local',
+    storage: isCloudEnabled() ? 'cloudinary' : 'local',
   })
 );
 

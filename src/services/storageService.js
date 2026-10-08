@@ -8,14 +8,33 @@ const cloudinary = require('cloudinary').v2;
 //   fichiers envoyes sur Cloudinary, l'URL https complete est stockee en base.
 // - Sinon (dev local) : disque, sous backend/uploads (public) ou
 //   backend/private-uploads (prive), comme avant.
-// Le SDK Cloudinary lit CLOUDINARY_URL tout seul.
+// Configuration : soit CLOUDINARY_URL (lu tout seul par le SDK), soit les
+// variables separees CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY /
+// CLOUDINARY_API_SECRET.
+const {
+  CLOUDINARY_URL,
+  CLOUDINARY_CLOUD_NAME,
+  CLOUDINARY_API_KEY,
+  CLOUDINARY_API_SECRET,
+} = process.env;
+
+const hasSeparateVars = Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET);
+if (!CLOUDINARY_URL && hasSeparateVars) {
+  cloudinary.config({
+    cloud_name: CLOUDINARY_CLOUD_NAME,
+    api_key: CLOUDINARY_API_KEY,
+    api_secret: CLOUDINARY_API_SECRET,
+    secure: true,
+  });
+}
 
 const UPLOADS_ROOT = path.join(__dirname, '../../uploads');
 const PRIVATE_ROOT = path.join(__dirname, '../../private-uploads');
-const CLOUD_FOLDER = 'mounesba';
+// Dossier racine sur Cloudinary (tous les fichiers de la plateforme dessous).
+const CLOUD_FOLDER = process.env.CLOUDINARY_FOLDER || 'mounesba';
 const PRIVATE_PREFIX = 'cloudinary:';
 
-const isCloudEnabled = () => Boolean(process.env.CLOUDINARY_URL);
+const isCloudEnabled = () => Boolean(CLOUDINARY_URL || hasSeparateVars);
 
 // Nom aleatoire, jamais le nom d'origine (CLAUDE.md - Uploads).
 const randomName = () => crypto.randomBytes(16).toString('hex');
