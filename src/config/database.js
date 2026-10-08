@@ -4,6 +4,9 @@ require('dotenv').config();
 
 const sequelizeOptions = {
   dialect: 'mysql',
+  // Import explicite : sur Vercel, le require dynamique de Sequelize n'est pas
+  // detecte par le bundler et mysql2 manque dans la fonction deployee.
+  dialectModule: require('mysql2'),
   logging: false,
   define: {
     underscored: true,
