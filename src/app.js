@@ -90,14 +90,33 @@ app.use(express.json());
 // les donnees personnelles des clients - jamais servis publiquement, seulement
 // via GET /api/documents/:filename (authentifie, proprietaire ou admin).
 app.use('/uploads/documents', (req, res) => res.status(404).json({ message: 'Document introuvable.' }));
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Noms de fichiers aleatoires (jamais reutilises) : contenu immuable, mis en
+// cache 1 an par le navigateur ET le CDN Vercel (s-maxage) - sinon chaque
+// image repasse par une fonction serverless a chaque visite.
+app.use(
+  '/uploads',
+  express.static(path.join(__dirname, '../uploads'), {
+    setHeaders: (res) => {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, s-maxage=31536000, immutable');
+    },
+  })
+);
+
+// Donnees publiques qui changent rarement : cache CDN court (5 min), servi
+// perime pendant la revalidation. GET uniquement, jamais les routes privees.
+const publicCache = (req, res, next) => {
+  if (req.method === 'GET') {
+    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+  }
+  next();
+};
 
 // Verification rapide que l'API repond (racine du domaine).
 app.get('/', (req, res) => res.json({ status: 'ok', service: 'Mounesba API' }));
 
 app.use('/api/auth', authRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/cities', cityRoutes);
+app.use('/api/categories', publicCache, categoryRoutes);
+app.use('/api/cities', publicCache, cityRoutes);
 app.use('/api/listings', listingRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/images', imageRoutes);
