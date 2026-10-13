@@ -6,7 +6,7 @@ const { computeInvoiceTotals } = require('../utils/invoiceTotals');
 const { computePlatformInvoiceTotals } = require('../utils/platformTax');
 
 // Meme dossier que pdfService.DOCUMENTS_DIR (contrats/factures PDF generes).
-const DOCUMENTS_DIR = path.join(__dirname, '../../uploads/documents');
+const DOCUMENTS_DIR = require('../config/documentsDir');
 
 const platformTransporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,

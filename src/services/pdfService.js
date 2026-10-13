@@ -24,7 +24,7 @@ function addDays(dateStr, days) {
   return base;
 }
 
-const DOCUMENTS_DIR = path.join(__dirname, '../../uploads/documents');
+const DOCUMENTS_DIR = require('../config/documentsDir');
 
 // Sur Vercel (serverless) le systeme de fichiers est en lecture seule : un
 // mkdirSync qui echoue au chargement du module ferait planter toute l'API.
@@ -38,9 +38,10 @@ function ensureDir(dir) {
 }
 ensureDir(DOCUMENTS_DIR);
 
-function writePdf(buildFn) {
+// filename impose : regeneration d'un PDF absent sous le meme nom, pour que
+// le pdfUrl deja enregistre en base reste valide (documentController).
+function writePdf(buildFn, filename = `${crypto.randomBytes(16).toString('hex')}.pdf`) {
   return new Promise((resolve, reject) => {
-    const filename = `${crypto.randomBytes(16).toString('hex')}.pdf`;
     const filePath = path.join(DOCUMENTS_DIR, filename);
     const doc = new PDFDocument({ margin: 50 });
     const stream = fs.createWriteStream(filePath);
@@ -78,7 +79,7 @@ function bookingScheduleLines(booking) {
   return [`Date de l'événement : ${formatFrDate(booking.eventDate)}${hours}`];
 }
 
-function generateContractPdf(contract, listing, client, booking = null) {
+function generateContractPdf(contract, listing, client, booking = null, { filename } = {}) {
   return writePdf((doc) => {
     const leftX = doc.page.margins.left;
     const rightX = doc.page.width - doc.page.margins.right;
@@ -232,7 +233,7 @@ function generateContractPdf(contract, listing, client, booking = null) {
         doc.page.height - doc.page.margins.bottom - 20,
         { width: contentWidth }
       );
-  });
+  }, filename);
 }
 
 // Facture prestataire -> client (M7) : mise en page inspiree d'un modele de
@@ -241,7 +242,7 @@ function generateContractPdf(contract, listing, client, booking = null) {
 // Aucun champ n'est invente : pas de ligne d'articles multiples (le modele
 // Invoice est un montant unique HT/TVA), pas d'IBAN (aucune donnee bancaire
 // stockee cote Listing) - uniquement les champs reellement disponibles.
-function generateInvoicePdf(invoice, listing, client, booking = null) {
+function generateInvoicePdf(invoice, listing, client, booking = null, { filename } = {}) {
   return writePdf((doc) => {
     const leftX = doc.page.margins.left;
     const rightX = doc.page.width - doc.page.margins.right;
@@ -489,14 +490,14 @@ function generateInvoicePdf(invoice, listing, client, booking = null) {
         doc.page.height - doc.page.margins.bottom - 20,
         { width: contentWidth }
       );
-  });
+  }, filename);
 }
 
 // Facture d'abonnement (admin -> prestataire), meme mise en page que
 // generateInvoicePdf (prestataire -> client) pour une identite visuelle
 // coherente sur toute la plateforme. Montant declaratif, aucun paiement en
 // ligne (CLAUDE.md - regle structurante n°1).
-function generateSubscriptionInvoicePdf(invoice, subscription, owner) {
+function generateSubscriptionInvoicePdf(invoice, subscription, owner, { filename } = {}) {
   return writePdf((doc) => {
     const leftX = doc.page.margins.left;
     const rightX = doc.page.width - doc.page.margins.right;
@@ -694,14 +695,14 @@ function generateSubscriptionInvoicePdf(invoice, subscription, owner) {
         doc.page.height - doc.page.margins.bottom - 20,
         { width: contentWidth }
       );
-  });
+  }, filename);
 }
 
 // Facture mensuelle des frais de mise en relation (Mounesba -> prestataire,
 // M13) : une ligne par demande aboutie validee (forfait fixe fige a la
 // confirmation). Frais HT (comme les prix des plans) : TVA 19 % ajoutee
 // par-dessus (utils/platformTax.js). Reglement hors plateforme.
-function generateCommissionInvoicePdf(invoice, listing, owner, commissions) {
+function generateCommissionInvoicePdf(invoice, listing, owner, commissions, { filename } = {}) {
   return writePdf((doc) => {
     const leftX = doc.page.margins.left;
     const rightX = doc.page.width - doc.page.margins.right;
@@ -842,7 +843,7 @@ function generateCommissionInvoicePdf(invoice, listing, owner, commissions) {
         doc.page.height - doc.page.margins.bottom - 20,
         { width: contentWidth }
       );
-  });
+  }, filename);
 }
 
 module.exports = {
