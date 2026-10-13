@@ -1,11 +1,9 @@
-const path = require('path');
 const { validationResult } = require('express-validator');
 const db = require('../models');
-const { persistBuffer, detectRealMimeType } = require('../middleware/upload');
+const { persistImage, detectRealMimeType } = require('../middleware/upload');
 const reviewService = require('../services/reviewService');
 
 const { Review, ReviewPhoto, Booking, Listing, Dispute } = db;
-const REVIEWS_DIR = path.join(__dirname, '../../uploads/reviews');
 const VALID_DISPUTE_TYPES = ['no_show', 'misleading', 'fake_review', 'other'];
 
 const SUB_RATING_FIELDS = [
@@ -116,8 +114,8 @@ exports.createReview = async (req, res, next) => {
     });
 
     for (const file of files) {
-      const filename = persistBuffer(file.buffer, REVIEWS_DIR);
-      await ReviewPhoto.create({ reviewId: review.id, url: `/uploads/reviews/${filename}` });
+      const url = await persistImage(file.buffer, 'reviews');
+      await ReviewPhoto.create({ reviewId: review.id, url });
     }
 
     await reviewService.recalculateListingRating(listingId);

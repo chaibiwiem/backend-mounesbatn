@@ -60,15 +60,15 @@ const allowedOrigins = (process.env.FRONTEND_URL || '')
 
 // CSP adaptee pour autoriser les tuiles OpenStreetMap (carte Leaflet, fiches
 // prestataires) et Google Fonts (Playfair Display) - une CSP par defaut
-// casserait les deux. Pas de domaine de stockage d'images externe a ajouter :
-// les uploads restent locaux, servis depuis cette meme origine (/uploads,
-// imgSrc 'self' suffit) - CLAUDE.md, section Uploads.
+// casserait les deux. Uploads : /uploads (meme origine) en local, Cloudinary
+// (res.cloudinary.com) en production - voir services/storageService.js.
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'https://*.tile.openstreetmap.org'],
+        imgSrc: ["'self'", 'data:', 'https://*.tile.openstreetmap.org', 'https://res.cloudinary.com'],
+        mediaSrc: ["'self'", 'https://res.cloudinary.com'],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         connectSrc: ["'self'"],

@@ -1,8 +1,8 @@
-const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { sanitizeSvg, MAX_SVG_SIZE } = require('../utils/sanitizeSvg');
+const storageService = require('../services/storageService');
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo
 const UPLOAD_DIR = path.join(__dirname, '../../uploads/listings');
@@ -49,65 +49,59 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE },
 });
 
-// Écrit un buffer déjà vérifié sur disque, sous un nom aléatoire (jamais le
-// nom d'origine), dans le dossier fourni. Renvoie le nom de fichier ou null
-// si le contenu n'est pas une vraie image JPG/PNG/WebP.
-function persistBuffer(buffer, destDir) {
+// Enregistre une image deja recue (disque local ou Cloudinary, voir
+// storageService) apres verification du vrai format. Renvoie son URL, ou null
+// si le contenu n'est pas une vraie image JPG/PNG/WebP. folder : "listings"
+// (galerie, logos, categories, vehicules...) ou "reviews".
+async function persistImage(buffer, folder = 'listings') {
   const realMimeType = detectRealMimeType(buffer);
   if (!realMimeType) return null;
-
-  fs.mkdirSync(destDir, { recursive: true });
-  const extension = EXTENSIONS[realMimeType];
-  const filename = `${crypto.randomBytes(16).toString('hex')}${extension}`;
-  fs.writeFileSync(path.join(destDir, filename), buffer);
-  return filename;
+  return storageService.saveFile(buffer, { folder, extension: EXTENSIONS[realMimeType] });
 }
 
-// À chaîner après upload.single('image') : écrit le fichier sur disque une
-// fois le contenu vérifié (galerie prestataire).
-function persistVerifiedImage(req, res, next) {
+// À chaîner après upload.single('image') : enregistre le fichier une fois le
+// contenu vérifié (galerie prestataire, logo, image de categorie).
+async function persistVerifiedImage(req, res, next) {
   if (!req.file) {
     return res.status(400).json({ message: 'Aucun fichier reçu.' });
   }
 
-  const filename = persistBuffer(req.file.buffer, UPLOAD_DIR);
-  if (!filename) {
-    return res
-      .status(400)
-      .json({ message: 'Format de fichier non supporté. Utilisez JPG, PNG ou WebP.' });
+  try {
+    const url = await persistImage(req.file.buffer);
+    if (!url) {
+      return res
+        .status(400)
+        .json({ message: 'Format de fichier non supporté. Utilisez JPG, PNG ou WebP.' });
+    }
+    req.uploadedFile = { url };
+    return next();
+  } catch (err) {
+    return next(err);
   }
-
-  req.uploadedFile = { filename, url: `/uploads/listings/${filename}` };
-  return next();
 }
 
 // Verifie/ecrit un fichier image optionnel (contrairement a la galerie
 // photos ou l'image est obligatoire) - utilise par les vehicules et leurs
 // modeles de decoration, qui peuvent etre crees/modifies sans photo.
-function persistOptionalImage(file, res) {
+async function persistOptionalImage(file, res) {
   if (!file) return { imageUrl: undefined, error: null };
 
-  const realMimeType = detectRealMimeType(file.buffer);
-  if (!realMimeType) {
+  const imageUrl = await persistImage(file.buffer);
+  if (!imageUrl) {
     res.status(400).json({ message: 'Image invalide. Utilisez JPG, PNG ou WebP.' });
     return { imageUrl: undefined, error: true };
   }
-
-  const filename = persistBuffer(file.buffer, UPLOAD_DIR);
-  return { imageUrl: `/uploads/listings/${filename}`, error: null };
+  return { imageUrl, error: null };
 }
 
 // Remplace la valeur d'un champ image sur une instance Sequelize par la
-// nouvelle URL, en supprimant l'ancien fichier du disque (best-effort, non
-// bloquant). No-op si aucune nouvelle image n'a ete fournie.
+// nouvelle URL, en supprimant l'ancien fichier (best-effort, non bloquant).
+// No-op si aucune nouvelle image n'a ete fournie.
 function replaceStoredFile(instance, field, newImageUrl) {
   if (!newImageUrl) return;
   const previousImage = instance[field];
   instance[field] = newImageUrl;
-  if (previousImage?.startsWith('/uploads/listings/')) {
-    const previousPath = path.join(UPLOAD_DIR, path.basename(previousImage));
-    fs.unlink(previousPath, () => {});
-  }
+  storageService.removeFile(previousImage);
 }
 
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 Mo
@@ -128,16 +122,14 @@ function detectRealVideoMimeType(buffer) {
   return match ? match[0] : null;
 }
 
-// Écrit un buffer video deja verifie sur disque, nom aleatoire. Renvoie le
-// nom de fichier ou null si le contenu n'est pas un vrai MP4/WebM.
-function persistVideoBuffer(buffer) {
+// Enregistre une video apres verification du vrai format (nom aleatoire).
+// Renvoie son URL ou null si le contenu n'est pas un vrai MP4/WebM.
+async function persistVideo(buffer) {
   const realMimeType = detectRealVideoMimeType(buffer);
   if (!realMimeType) return null;
 
   const extension = realMimeType === 'video/webm' ? '.webm' : '.mp4';
-  const filename = `${crypto.randomBytes(16).toString('hex')}${extension}`;
-  fs.writeFileSync(path.join(VIDEO_UPLOAD_DIR, filename), buffer);
-  return filename;
+  return storageService.saveFile(buffer, { folder: 'videos', extension, resourceType: 'video' });
 }
 
 // Accepte le champ 'video' (upload direct, galerie video) et/ou 'thumbnail'
@@ -169,9 +161,9 @@ const uploadIcon = multer({
   limits: { fileSize: MAX_SVG_SIZE },
 });
 
-// A chainer apres uploadIcon.single('icon') : assainit puis ecrit le SVG sur
-// disque sous un nom aleatoire (jamais le nom d'origine).
-function persistVerifiedIcon(req, res, next) {
+// A chainer apres uploadIcon.single('icon') : assainit puis enregistre le SVG
+// sous un nom aleatoire (jamais le nom d'origine).
+async function persistVerifiedIcon(req, res, next) {
   if (!req.file) {
     return res.status(400).json({ message: 'Aucun fichier reçu.' });
   }
@@ -181,11 +173,22 @@ function persistVerifiedIcon(req, res, next) {
     return res.status(400).json({ message: 'Fichier SVG invalide ou non supporté.' });
   }
 
-  const filename = `${crypto.randomBytes(16).toString('hex')}.svg`;
-  fs.writeFileSync(path.join(ICON_UPLOAD_DIR, filename), sanitized);
+  try {
+    const url = await storageService.saveFile(Buffer.from(sanitized), { folder: 'icons', extension: '.svg' });
+    req.uploadedFile = { url };
+    return next();
+  } catch (err) {
+    return next(err);
+  }
+}
 
-  req.uploadedFile = { filename, url: `/uploads/icons/${filename}` };
-  return next();
+// Carte CIN : verifiee comme une photo (magic bytes), stockee en prive (voir
+// storageService.saveLegalFile). Renvoie la reference a enregistrer en base
+// (jamais une URL publique), ou null si format invalide.
+async function persistLegalImage(buffer) {
+  const realMimeType = detectRealMimeType(buffer);
+  if (!realMimeType) return null;
+  return storageService.saveLegalFile(buffer, EXTENSIONS[realMimeType]);
 }
 
 // Documents legaux sensibles (carte CIN du gerant...) - CLAUDE.md, section
@@ -202,12 +205,13 @@ module.exports = {
   persistVerifiedImage,
   persistOptionalImage,
   replaceStoredFile,
-  persistBuffer,
+  persistImage,
+  persistLegalImage,
   detectRealMimeType,
   UPLOAD_DIR,
   uploadVideoFields,
   uploadThumbnailOnly,
-  persistVideoBuffer,
+  persistVideo,
   detectRealVideoMimeType,
   VIDEO_UPLOAD_DIR,
   LEGAL_UPLOAD_DIR,

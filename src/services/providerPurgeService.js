@@ -1,8 +1,6 @@
-const fs = require('fs');
-const path = require('path');
 const { Op } = require('sequelize');
 const db = require('../models');
-const { LEGAL_UPLOAD_DIR } = require('../middleware/upload');
+const storageService = require('../services/storageService');
 
 // Suppression DEFINITIVE d'une fiche prestataire et de TOUT ce qui en depend
 // (demandes, avis, reservations, clients CRM, contrats, factures, frais de
@@ -10,8 +8,6 @@ const { LEGAL_UPLOAD_DIR } = require('../middleware/upload');
 // Super Admin depuis l'onglet "Supprimés" avec confirmation par saisie du nom
 // de la fiche. Irreversible : les factures et contrats sont eux aussi
 // supprimes - c'est a l'admin de conserver ses archives comptables.
-
-const BACKEND_ROOT = path.join(__dirname, '../..');
 
 const ids = (rows) => rows.map((row) => row.id);
 
@@ -37,16 +33,15 @@ async function previewPurge(listing) {
   };
 }
 
-// Fichiers disque references par les lignes supprimees (photos, videos,
-// PDF...) - supprimes APRES le commit, en best effort.
+// URL des fichiers references par les lignes supprimees (photos, videos,
+// PDF...) - supprimes APRES le commit, en best effort (disque ou Cloudinary,
+// une URL externe type YouTube est ignoree par storageService.removeFile).
 function collectUploadFiles(rows, fields) {
   const files = [];
   rows.forEach((row) => {
     fields.forEach((field) => {
       const value = row[field];
-      if (typeof value === 'string' && value.startsWith('/uploads/')) {
-        files.push(path.join(BACKEND_ROOT, value));
-      }
+      if (typeof value === 'string' && value) files.push(value);
     });
   });
   return files;
@@ -54,6 +49,7 @@ function collectUploadFiles(rows, fields) {
 
 async function purgeListing(listing, { deleteOwnerAccount = false } = {}) {
   const files = [];
+  const cinDocumentRef = listing.cinDocumentUrl;
   const listingId = listing.id;
   const byListing = { where: { listingId } };
 
@@ -93,7 +89,6 @@ async function purgeListing(listing, { deleteOwnerAccount = false } = {}) {
       ...collectUploadFiles(commissionInvoices, ['pdfUrl']),
       ...collectUploadFiles([listing], ['logoUrl'])
     );
-    if (listing.cinDocumentUrl) files.push(path.join(LEGAL_UPLOAD_DIR, path.basename(listing.cinDocumentUrl)));
 
     // Ordre : enfants avant parents (contraintes de cles etrangeres).
     if (reviewIds.length) await db.ReviewPhoto.destroy(whereIn('reviewId', reviewIds));
@@ -161,7 +156,8 @@ async function purgeListing(listing, { deleteOwnerAccount = false } = {}) {
     }
   });
 
-  files.forEach((file) => fs.unlink(file, () => {}));
+  files.forEach((url) => storageService.removeFile(url));
+  storageService.removeLegalFile(cinDocumentRef);
 }
 
 module.exports = { previewPurge, purgeListing };

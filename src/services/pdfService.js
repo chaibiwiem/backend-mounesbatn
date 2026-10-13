@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
-const { UPLOAD_DIR: LISTINGS_UPLOAD_DIR } = require('../middleware/upload');
+const { readPublicFile } = require('./storageService');
 const { PLAN_CATALOG } = require('./planService');
 const { staySummary, roomsSummary, formatFrDate } = require('../utils/stay');
 const { computePlatformInvoiceTotals } = require('../utils/platformTax');
@@ -242,7 +242,10 @@ function generateContractPdf(contract, listing, client, booking = null, { filena
 // Aucun champ n'est invente : pas de ligne d'articles multiples (le modele
 // Invoice est un montant unique HT/TVA), pas d'IBAN (aucune donnee bancaire
 // stockee cote Listing) - uniquement les champs reellement disponibles.
-function generateInvoicePdf(invoice, listing, client, booking = null, { filename } = {}) {
+async function generateInvoicePdf(invoice, listing, client, booking = null, { filename } = {}) {
+  // Logo charge avant la mise en page (disque local ou Cloudinary) : pdfkit
+  // dessine de facon synchrone.
+  const logo = listing.logoUrl ? await readPublicFile(listing.logoUrl) : null;
   return writePdf((doc) => {
     const leftX = doc.page.margins.left;
     const rightX = doc.page.width - doc.page.margins.right;
@@ -254,12 +257,9 @@ function generateInvoicePdf(invoice, listing, client, booking = null, { filename
 
     // --- En-tete : logo (si disponible) + gros titre FACTURE -------------
     let headerBottom = 90;
-    if (listing.logoUrl) {
+    if (logo) {
       try {
-        const logoPath = path.join(LISTINGS_UPLOAD_DIR, path.basename(listing.logoUrl));
-        if (fs.existsSync(logoPath)) {
-          doc.image(logoPath, leftX, 45, { width: 50, height: 50 });
-        }
+        doc.image(logo, leftX, 45, { width: 50, height: 50 });
       } catch {
         // Logo illisible : on continue sans (jamais bloquant pour la generation).
       }

@@ -1,9 +1,7 @@
-const path = require('path');
-const fs = require('fs');
 const { Op } = require('sequelize');
 const { validationResult } = require('express-validator');
 const db = require('../models');
-const { UPLOAD_DIR } = require('../middleware/upload');
+const storageService = require('../services/storageService');
 const { encrypt } = require('../utils/secretCipher');
 const emailService = require('../services/emailService');
 const { PLAN_CATALOG, getProviderPlan, isSubscriptionExpired } = require('../services/planService');
@@ -673,12 +671,10 @@ exports.updateMyCategories = async (req, res, next) => {
   }
 };
 
-// Supprime l'ancien fichier logo stocke sur disque, le cas echeant (jamais
-// pour un logo deja externe/absent).
+// Supprime l'ancien fichier logo stocke (disque ou Cloudinary), le cas
+// echeant (jamais pour un logo externe/absent).
 function removeLogoFile(logoUrl) {
-  if (!logoUrl || !logoUrl.startsWith('/uploads/listings/')) return;
-  const filePath = path.join(UPLOAD_DIR, path.basename(logoUrl));
-  fs.unlink(filePath, () => {});
+  storageService.removeFile(logoUrl);
 }
 
 // Logo prestataire (module M5) : image distincte de la galerie photos,
