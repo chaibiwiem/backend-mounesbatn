@@ -40,6 +40,27 @@ Object.values(db).forEach((model) => {
   if (model.associate) model.associate(db);
 });
 
+// Champ de formulaire laisse vide ('') sur une colonne non textuelle (nombre,
+// date, enum...) : enregistre NULL. Les validateurs (optional({ checkFalsy:
+// true })) laissent passer '' ; un MySQL en mode strict (Clever Cloud, prod)
+// le refuse alors ("Incorrect integer value: ''" -> erreur 500), la ou un
+// MySQL local non strict le convertissait en silence.
+const TEXT_TYPES = ['STRING', 'TEXT', 'CHAR', 'CITEXT'];
+function blankToNull(model, values) {
+  if (!values) return;
+  Object.keys(values).forEach((key) => {
+    const attribute = model.rawAttributes[key];
+    if (values[key] === '' && attribute && !TEXT_TYPES.includes(attribute.type?.key)) {
+      values[key] = null;
+    }
+  });
+}
+sequelize.addHook('beforeValidate', (instance) => blankToNull(instance.constructor, instance.dataValues));
+sequelize.addHook('beforeBulkCreate', (instances) =>
+  instances.forEach((instance) => blankToNull(instance.constructor, instance.dataValues))
+);
+sequelize.addHook('beforeBulkUpdate', (options) => blankToNull(options.model, options.attributes));
+
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
