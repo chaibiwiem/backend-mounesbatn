@@ -7,7 +7,18 @@ const { sanitizeSvg, MAX_SVG_SIZE } = require('../utils/sanitizeSvg');
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 Mo
 const UPLOAD_DIR = path.join(__dirname, '../../uploads/listings');
 
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// Sur Vercel (serverless) le systeme de fichiers est en lecture seule : un
+// mkdirSync qui echoue au chargement du module ferait planter toute l'API.
+// On ignore l'erreur ici ; seul l'upload concerne echouera.
+function ensureDir(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    console.warn(`Dossier ${dir} non cree (${err.code})`);
+  }
+}
+
+ensureDir(UPLOAD_DIR);
 
 // Signature(s) binaire(s) de chaque format accepte, avec leur position dans
 // le fichier. JPG (.jpg/.jpeg), PNG et WebP - un WebP commence par "RIFF",
@@ -102,7 +113,7 @@ function replaceStoredFile(instance, field, newImageUrl) {
 const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50 Mo
 const VIDEO_UPLOAD_DIR = path.join(__dirname, '../../uploads/videos');
 
-fs.mkdirSync(VIDEO_UPLOAD_DIR, { recursive: true });
+ensureDir(VIDEO_UPLOAD_DIR);
 
 // mp4 : signature 'ftyp' a l'offset 4 (pas 0). webm : en-tete EBML a l'offset 0.
 const VIDEO_MAGIC_BYTES = {
@@ -151,7 +162,7 @@ const uploadThumbnailOnly = multer({
 // le contenu est assaini (voir utils/sanitizeSvg.js) avant d'etre ecrit sur
 // disque. Limite basse (100 Ko) car une icone n'a pas besoin de plus.
 const ICON_UPLOAD_DIR = path.join(__dirname, '../../uploads/icons');
-fs.mkdirSync(ICON_UPLOAD_DIR, { recursive: true });
+ensureDir(ICON_UPLOAD_DIR);
 
 const uploadIcon = multer({
   storage: multer.memoryStorage(),
@@ -184,7 +195,7 @@ function persistVerifiedIcon(req, res, next) {
 // photos/videos) : seul un endpoint authentifie (proprietaire de la fiche ou
 // admin) peut les lire, jamais une URL publique devinable.
 const LEGAL_UPLOAD_DIR = path.join(__dirname, '../../private-uploads/legal');
-fs.mkdirSync(LEGAL_UPLOAD_DIR, { recursive: true });
+ensureDir(LEGAL_UPLOAD_DIR);
 
 module.exports = {
   upload,

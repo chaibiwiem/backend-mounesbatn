@@ -25,7 +25,18 @@ function addDays(dateStr, days) {
 }
 
 const DOCUMENTS_DIR = path.join(__dirname, '../../uploads/documents');
-fs.mkdirSync(DOCUMENTS_DIR, { recursive: true });
+
+// Sur Vercel (serverless) le systeme de fichiers est en lecture seule : un
+// mkdirSync qui echoue au chargement du module ferait planter toute l'API.
+// On ignore l'erreur ici ; seul l'upload concerne echouera.
+function ensureDir(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (err) {
+    console.warn(`Dossier ${dir} non cree (${err.code})`);
+  }
+}
+ensureDir(DOCUMENTS_DIR);
 
 function writePdf(buildFn) {
   return new Promise((resolve, reject) => {

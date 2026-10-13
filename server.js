@@ -20,16 +20,21 @@ process.on('unhandledRejection', (reason) => {
 // serveur en production.
 process.on('uncaughtException', (err) => {
   console.error('Exception non geree, redemarrage du serveur :', err);
-  process.exit(1);
+  if (!process.env.VERCEL) process.exit(1);
 });
 
-app.listen(PORT, () => {
-  console.log(`Mounesba API en ecoute sur le port ${PORT}`);
-});
+// Sur Vercel (serverless), la plateforme appelle directement l'app exportee :
+// pas de listen() ni de taches cron en memoire (l'instance est gelee entre
+// deux requetes, les crons n'y tourneraient jamais de facon fiable).
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Mounesba API en ecoute sur le port ${PORT}`);
+  });
 
-leadCronService.start();
-subscriptionCronService.start();
-commissionCronService.start();
+  leadCronService.start();
+  subscriptionCronService.start();
+  commissionCronService.start();
+}
 
 // Ecrase les valeurs par defaut de PLAN_CATALOG avec celles enregistrees en
 // base (Parametres admin > Plans & Tarifs) - echec non bloquant (ex. table

@@ -4,6 +4,12 @@ require('dotenv').config();
 
 const sequelizeOptions = {
   dialect: 'mysql',
+  // Import explicite : sur Vercel, Sequelize charge mysql2 dynamiquement et le
+  // bundler ne le voit pas ("Please install mysql2 package manually").
+  dialectModule: require('mysql2'),
+  // Clever Cloud (offre gratuite) limite le nombre de connexions simultanees,
+  // et chaque instance serverless ouvre son propre pool.
+  pool: { max: 3, min: 0, idle: 10000, acquire: 30000 },
   logging: false,
   define: {
     underscored: true,
