@@ -2,6 +2,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const sequelize = require('./config/database');
 
 const authRoutes = require('./routes/auth');
 const categoryRoutes = require('./routes/categories');
@@ -98,6 +99,20 @@ app.use(
   '/uploads',
   express.static(path.join(__dirname, '../uploads'), { maxAge: '30d', immutable: true })
 );
+
+app.get('/', (req, res) => res.json({ name: 'Mounesba API', status: 'ok' }));
+
+// Verifie que l'API joint bien la base (utile apres un deploiement). Aucun
+// detail d'erreur renvoye : seul le code est journalise cote serveur.
+app.get('/api/health', async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    res.json({ status: 'ok', database: 'ok' });
+  } catch (err) {
+    console.error('Health check base de donnees :', err.message);
+    res.status(503).json({ status: 'error', database: 'unreachable' });
+  }
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
