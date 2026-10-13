@@ -2,7 +2,11 @@ node_modules/
 .env
 .env.local
 *.log
-uploads/
+# Fichiers prives (factures/contrats PDF, documents legaux) : jamais commites.
+# Les images publiques (uploads/listings, icons, videos) sont versionnees car
+# Vercel n'a pas de disque persistant pour les servir autrement.
+uploads/documents/
+uploads/reviews/
 private-uploads/
 .DS_Store
 Thumbs.db
